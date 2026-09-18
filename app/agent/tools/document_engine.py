@@ -1,9 +1,4 @@
 import os
-import jinja2
-from docxtpl import DocxTemplate
-
-import os
-from docxtpl import DocxTemplate
 
 def detect_template_fields(template_path: str) -> list[str]:
     """
@@ -12,6 +7,8 @@ def detect_template_fields(template_path: str) -> list[str]:
     """
     if not os.path.exists(template_path):
         raise FileNotFoundError(f"Template tidak ditemukan: {template_path}")
+
+    from docxtpl import DocxTemplate
 
     doc = DocxTemplate(template_path)
     
@@ -28,6 +25,8 @@ def generate_document(template_path: str, output_path: str, data: dict) -> str:
         return f"Gagal: Template {template_path} tidak ditemukan."
 
     try:
+        from docxtpl import DocxTemplate
+
         doc = DocxTemplate(template_path)
         doc.render(data)
         doc.save(output_path)
@@ -41,8 +40,8 @@ def generate_document(template_path: str, output_path: str, data: dict) -> str:
 if __name__ == "__main__":
     # Asumsi kamu punya file ini dengan tag {{ nama }}, {{ nik }}, {{ tujuan }}
     # Buat file dummy .docx ini dulu di komputermu sebelum di-run!
-    test_template = "/home/naziri/Desktop/my_python/andora-be/templates/template_surat_5_point_andora_kaltim_tuntas.docx"
-    test_output = "/home/naziri/Desktop/my_python/andora-be/templates/output/surat_terisi.docx"
+    test_template = "templates/template_surat_5_point_andora_kaltim_tuntas.docx"
+    test_output = "templates/output/surat_terisi.docx"
     
     # Pastikan folder ada
     os.makedirs("templates/dokumen", exist_ok=True)

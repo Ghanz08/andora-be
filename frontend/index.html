@@ -80,7 +80,21 @@
       </div>
       <div class="split">
         <div><h2>Supabase Messages</h2><div id="messages" class="messages"></div></div>
-        <div><h2>Event Log</h2><pre id="log"></pre></div>
+        <div>
+          <h2>Dokumen Terbuat & Upload</h2>
+          <div id="docSection" style="margin-bottom:12px; padding:12px; border:1px solid var(--line); background:#0b100d;">
+            <div id="docNotice" style="color:var(--muted); font-size:.85rem; margin-bottom:8px;">Belum ada dokumen yang dicetak di sesi ini.</div>
+            <div id="docButtons" style="display:flex; flex-direction:column; gap:8px;"></div>
+            <hr style="border:0; border-top:1px solid var(--line); margin:12px 0;">
+            <label style="margin:0 0 6px;">Upload PDF Referensi ke Room Ini
+              <input id="pdfFileInput" type="file" accept=".pdf" style="margin-top:4px;">
+            </label>
+            <button id="uploadPdfBtn" style="margin-top:4px;">Upload PDF</button>
+            <div id="uploadStatus" style="font-size:.78rem; color:var(--muted); margin-top:4px;"></div>
+          </div>
+          <h2>Event Log</h2>
+          <pre id="log"></pre>
+        </div>
       </div>
     </section>
   </div>
@@ -100,12 +114,78 @@ async function login(){const c=cfg(); const body=await request(`${c.supabaseUrl}
 async function logout(){await disconnect(); state.accessToken=''; state.conversationId=''; state.livekit=null; renderMessages([]); update(); log('keluar')}
 async function createConversation(){const body=await request(`${cfg().apiUrl}/conversations`,{method:'POST',body:JSON.stringify({title:'Tes Gemini Live'})}); state.conversationId=body.id; await refreshConversation(); update()}
 async function createToken(){state.livekit=await request(`${cfg().apiUrl}/livekit/token`,{method:'POST',body:JSON.stringify({conversation_id:state.conversationId})}); update()}
-function wireRoom(room){const {RoomEvent,Track}=LivekitClient; room.on(RoomEvent.TrackSubscribed,(track,publication,participant)=>{log('track subscribed',{identity:participant.identity,kind:track.kind,source:publication.source}); if(track.kind===Track.Kind.Audio){const el=track.attach(); el.autoplay=true; el.controls=true; $('remoteAudio').replaceWith(el); el.id='remoteAudio';}}); room.on(RoomEvent.DataReceived,(payload,participant,kind,topic)=>{let data=new TextDecoder().decode(payload); try{data=JSON.parse(data)}catch{} log(`data ${topic||'no-topic'}`,{from:participant&&participant.identity,data}); if(data&&typeof data==='object'&&data.conversation_id) refreshConversation().catch(e=>log('refresh error',{message:e.message}));}); room.on(RoomEvent.ConnectionStateChanged,(connectionState)=>{log('room state',{connectionState}); update()}); room.on(RoomEvent.ParticipantConnected,p=>log('participant connected',{identity:p.identity,kind:p.kind}));}
+function addDocButton(docData){
+  $('docNotice').style.display='none';
+  const btn = document.createElement('a');
+  const apiUrl = cfg().apiUrl;
+  const targetUrl = docData.download_url ? `${apiUrl}${docData.download_url}` : docData.url;
+  btn.href = targetUrl;
+  btn.target = "_blank";
+  btn.download = docData.file_name || "dokumen.docx";
+  btn.className = "primary";
+  btn.style.display = "block";
+  btn.style.textAlign = "center";
+  btn.style.padding = "10px";
+  btn.style.textDecoration = "none";
+  btn.textContent = `📥 DOWNLOAD ${docData.nama_dokumen.toUpperCase()}`;
+  $('docButtons').prepend(btn);
+}
+
+async function uploadPdf(){
+  const fileInput = $('pdfFileInput');
+  if(!fileInput.files.length) return alert('Pilih file PDF terlebih dahulu');
+  const file = fileInput.files[0];
+  const roomName = (state.livekit && state.livekit.room_name) || (state.conversationId ? `andora-${state.conversationId}` : '');
+  if(!roomName) return alert('Buat percakapan atau connect ke room terlebih dahulu');
+
+  const formData = new FormData();
+  formData.append('room_name', roomName);
+  formData.append('file', file);
+
+  $('uploadStatus').textContent = 'Mengupload PDF...';
+  try {
+    const res = await fetch(`${cfg().apiUrl}/api/documents/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    const json = await res.json();
+    if(!res.ok) throw new Error(json.detail || 'Upload gagal');
+    $('uploadStatus').textContent = `✅ Berhasil upload: ${file.name} ke ${roomName}`;
+    log('upload pdf success', json);
+  } catch(e) {
+    $('uploadStatus').textContent = `❌ Gagal: ${e.message}`;
+    log('upload pdf error', {message: e.message});
+  }
+}
+
+function wireRoom(room){
+  const {RoomEvent,Track}=LivekitClient;
+  room.on(RoomEvent.TrackSubscribed,(track,publication,participant)=>{
+    log('track subscribed',{identity:participant.identity,kind:track.kind,source:publication.source});
+    if(track.kind===Track.Kind.Audio){
+      const el=track.attach(); el.autoplay=true; el.controls=true;
+      $('remoteAudio').replaceWith(el); el.id='remoteAudio';
+    }
+  });
+  room.on(RoomEvent.DataReceived,(payload,participant,kind,topic)=>{
+    let data=new TextDecoder().decode(payload);
+    try{data=JSON.parse(data)}catch{}
+    log(`data ${topic||'no-topic'}`,{from:participant&&participant.identity,data});
+    if(data&&typeof data==='object'){
+      if(data.event==='DOCUMENT_READY'){
+        addDocButton(data);
+      }
+      if(data.conversation_id) refreshConversation().catch(e=>log('refresh error',{message:e.message}));
+    }
+  });
+  room.on(RoomEvent.ConnectionStateChanged,(connectionState)=>{log('room state',{connectionState}); update()});
+  room.on(RoomEvent.ParticipantConnected,p=>log('participant connected',{identity:p.identity,kind:p.kind}));
+}
 async function connect(){if(!window.LivekitClient) throw new Error('LiveKit SDK CDN belum termuat'); const room=new LivekitClient.Room(); wireRoom(room); await room.connect(state.livekit.server_url,state.livekit.participant_token); state.room=room; await room.localParticipant.setMicrophoneEnabled(true,{echoCancellation:true,noiseSuppression:true,autoGainControl:true}); state.mic=true; update(); log('connected with always-on mic',{room:state.livekit.room_name})}
 async function disconnect(){if(state.room){await state.room.localParticipant.setMicrophoneEnabled(false); state.room.disconnect();} state.room=null; state.mic=false; state.livekit=null; update()}
 async function refreshConversation(){if(!state.conversationId) return; const body=await request(`${cfg().apiUrl}/conversations/${state.conversationId}`); renderMessages(body.messages||[])}
 function bind(id,fn){$(id).addEventListener('click',()=>fn().catch(e=>log('error',{message:e.message})))}
-bind('signupBtn',signup); bind('loginBtn',login); bind('logoutBtn',logout); bind('newConvBtn',createConversation); bind('tokenBtn',createToken); bind('connectBtn',connect); bind('disconnectBtn',disconnect); bind('refreshBtn',refreshConversation);
+bind('signupBtn',signup); bind('loginBtn',login); bind('logoutBtn',logout); bind('newConvBtn',createConversation); bind('tokenBtn',createToken); bind('connectBtn',connect); bind('disconnectBtn',disconnect); bind('refreshBtn',refreshConversation); bind('uploadPdfBtn',uploadPdf);
 renderMessages([]); update(); log('tester ready',{livekitClient:!!window.LivekitClient});
 </script>
 </body>

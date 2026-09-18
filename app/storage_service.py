@@ -28,3 +28,13 @@ def upload_document(file_path: str) -> str:
 
     public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(storage_path)
     return public_url
+
+
+def get_document_url(file_name: str) -> str:
+    storage_path = f"documents/{file_name}"
+    return supabase.storage.from_(BUCKET_NAME).get_public_url(storage_path)
+
+
+def download_document_bytes(file_name: str) -> bytes:
+    storage_path = f"documents/{file_name}"
+    return supabase.storage.from_(BUCKET_NAME).download(storage_path)

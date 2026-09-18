@@ -25,6 +25,10 @@
     {
       "key": "conversation_id",
       "value": ""
+    },
+    {
+      "key": "document_filename",
+      "value": "surat_pernyataan_5_poin_andora-test.docx"
     }
   ],
   "item": [
@@ -273,6 +277,92 @@
                   "pm.expect(body.server_url).to.match(/^wss?:\\/\\//);",
                   "pm.expect(body.participant_token).to.be.a('string').and.not.empty;",
                   "pm.expect(body.room_name).to.eql(`andora-${pm.collectionVariables.get('conversation_id')}`);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Documents",
+      "item": [
+        {
+          "name": "Download Generated Document (Direct Attachment)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_url}}/api/documents/download/{{document_filename}}",
+            "description": "Mengalirkan file dokumen Word (.docx) secara langsung dari server/storage sebagai attachment file."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Document download responds 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Has content-disposition attachment header', function () {",
+                  "  pm.expect(pm.response.headers.get('content-disposition')).to.include('attachment');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download Generated Document (Redirect to Supabase URL)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_url}}/api/documents/download/{{document_filename}}?redirect=true",
+            "description": "Mengarahkan (307 Temporary Redirect) ke public URL Supabase Storage langsung."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Redirects to Supabase Storage or returns 200 if follow-redirect', function () {",
+                  "  pm.expect([200, 307]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload User Document (PDF)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "room_name",
+                  "value": "andora-{{conversation_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{api_url}}/api/documents/upload",
+            "description": "Upload file PDF referensi dari user untuk dibaca oleh agen suara lewat tool read_uploaded_document."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Upload returns success', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
                 ]
               }
             }

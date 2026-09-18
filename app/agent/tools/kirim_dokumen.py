@@ -6,7 +6,7 @@ from typing import Literal
 
 from livekit.agents import function_tool, RunContext
 
-from app.services.storage_service import upload_document
+from app.storage_service import upload_document
 
 
 def _send_email_smtp(to_email: str, file_path: str, subject: str, body: str) -> None:
@@ -57,7 +57,11 @@ async def kirim_dokumen(
     if not hasattr(context, "userdata") or context.userdata is None:
         return "Error sistem: tidak ada data sesi tersimpan."
 
-    file_path = context.userdata.generated_documents.get(nama_dokumen)
+    document_info = context.userdata.generated_documents.get(nama_dokumen)
+    if isinstance(document_info, dict):
+        file_path = document_info.get("local_path")
+    else:
+        file_path = document_info
 
     if not file_path or not os.path.exists(file_path):
         return (
@@ -108,7 +112,8 @@ async def kirim_dokumen(
 
             if context.room:
                 await context.room.local_participant.publish_data(
-                    json.dumps(payload).encode()
+                    json.dumps(payload).encode("utf-8"),
+                    reliable=True,
                 )
 
             return (

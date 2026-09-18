@@ -271,6 +271,17 @@ Common errors:
 - `401`: missing, invalid, or expired Supabase access token.
 - `404`: conversation not found or not owned by authenticated user.
 
+#### `GET /api/documents/download/{file_name}`
+
+Download generated administrative Word document (.docx).
+
+- Default: returns direct attachment stream with `Content-Disposition`.
+- `?redirect=true`: redirects (307) directly to the Supabase Storage public URL.
+
+#### `POST /api/documents/upload`
+
+Upload a PDF file (form-data: `room_name`, `file`) for the assistant to read during voice sessions.
+
 ### 8. LiveKit Data Events
 
 Turn completion event example:
