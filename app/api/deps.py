@@ -1,8 +1,10 @@
 from fastapi import Header, HTTPException, status
 import asyncio
 
-from app.integrations.supabase_client import SupabaseService
 from app.schemas import UserAuth
+from app.config import settings
+from app.integrations.supabase_client import SupabaseService
+
 
 
 async def get_current_user(authorization: str | None = Header(None)) -> UserAuth:
@@ -19,7 +21,11 @@ async def get_current_user(authorization: str | None = Header(None)) -> UserAuth
     except ValueError:
         user_data = None
     if user_data:
-        return UserAuth(id=user_data["id"], email=user_data.get("email"))
+        return UserAuth(
+            id=user_data["id"],
+            email=user_data.get("email"),
+            provider=user_data.get("provider"),
+        )
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

@@ -15,10 +15,9 @@ class Settings(BaseSettings):
     LIVEKIT_URL: str = ""
     LIVEKIT_API_KEY: str = ""
     LIVEKIT_API_SECRET: str = ""
-    WHISPER_MODEL: str = "small"
-    WHISPER_DEVICE: str = "cpu"
-    WHISPER_COMPUTE_TYPE: str = "int8"
-    WHISPER_LANGUAGE: str = "id"
+    LIVEKIT_STT_MODEL: str = "deepgram/nova-3"
+    LIVEKIT_STT_LANGUAGE: str = "id"
+    LIVEKIT_STT_KEYTERMS: str = "beasiswa,Beasiswa Kaltim Tuntas,Kaltim Tuntas,Beasiswa Unggulan"
     LIVEKIT_TTS_MODEL: str = "cartesia/sonic-3"
     LIVEKIT_TTS_VOICE: str = "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
 
@@ -26,6 +25,11 @@ class Settings(BaseSettings):
     NINEROUTER_API_KEY: str = ""
     NINEROUTER_MODEL: str = "ghn-fast"
     NINEROUTER_MAX_TOKENS: int = 2048
+    OPENAI_API_KEY: str = ""
+    GOOGLE_API_KEY: str = ""
+    GEMINI_REALTIME_MODEL: str = "gemini-3.8-live"
+    GEMINI_REALTIME_VOICE: str = "Puck"
+    GEMINI_REALTIME_TEMPERATURE: float = 0.8
 
     MAX_CONTEXT_MESSAGES: int = 20
 

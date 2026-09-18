@@ -15,6 +15,22 @@ def get_supabase_client() -> Client:
     return _client
 
 
+def _get_auth_provider(user) -> str | None:
+    app_metadata = getattr(user, "app_metadata", None) or {}
+    provider = app_metadata.get("provider")
+    if provider:
+        return provider
+
+    identities = getattr(user, "identities", None) or []
+    if identities:
+        identity = identities[0]
+        if isinstance(identity, dict):
+            return identity.get("provider")
+        return getattr(identity, "provider", None)
+
+    return None
+
+
 class SupabaseService:
     @staticmethod
     def get_user_from_token(token: str) -> dict | None:
@@ -22,7 +38,12 @@ class SupabaseService:
         try:
             user_resp = client.auth.get_user(token)
             if user_resp and user_resp.user:
-                return {"id": user_resp.user.id, "email": user_resp.user.email}
+                user = user_resp.user
+                return {
+                    "id": user.id,
+                    "email": user.email,
+                    "provider": _get_auth_provider(user),
+                }
         except Exception as error:
             raise ValueError("Invalid or expired token") from error
         return None
