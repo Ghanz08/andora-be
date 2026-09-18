@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANDORA Live Voice Tester</title>
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.min.js"></script>
+  <style>
+    :root { color-scheme: dark; --bg:#080b0a; --panel:#111814; --ink:#f6f0d8; --muted:#9ca88f; --line:#33422f; --accent:#d8ff55; --hot:#ff7448; --ok:#6ee7a8; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 10% 5%, rgba(216,255,85,.18), transparent 26rem), radial-gradient(circle at 90% 15%, rgba(255,116,72,.16), transparent 28rem), repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 12px), var(--bg); color:var(--ink); font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    main { width:min(1180px, calc(100% - 28px)); margin:0 auto; padding:28px 0; }
+    h1 { margin:0 0 4px; font-size:clamp(2.2rem, 8vw, 5.8rem); line-height:.85; letter-spacing:-.07em; text-transform:uppercase; }
+    p { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:16px; }
+    section { border:1px solid var(--line); background:color-mix(in srgb, var(--panel) 86%, transparent); box-shadow:0 24px 80px rgba(0,0,0,.38); padding:16px; }
+    label { display:grid; gap:6px; margin:10px 0; color:var(--muted); text-transform:uppercase; font-size:.78rem; letter-spacing:.08em; }
+    input, button { width:100%; font:inherit; }
+    input { padding:11px 12px; color:var(--ink); background:#070a08; border:1px solid var(--line); outline:none; }
+    input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(216,255,85,.14); }
+    button { border:1px solid var(--line); background:#172119; color:var(--ink); padding:11px 12px; text-transform:uppercase; cursor:pointer; }
+    button:hover:not(:disabled) { border-color:var(--accent); transform:translateY(-1px); }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .primary { background:var(--accent); color:#101707; border-color:var(--accent); font-weight:900; }
+    .danger { border-color:var(--hot); color:#ffd9cc; }
+    .actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .status { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px; }
+    .pill { min-height:70px; border:1px solid var(--line); background:rgba(0,0,0,.22); padding:10px; overflow-wrap:anywhere; }
+    .pill b { display:block; color:var(--muted); text-transform:uppercase; font-size:.72rem; }
+    .voice { display:grid; grid-template-columns:minmax(220px, 320px) 1fr; gap:14px; }
+    .orb { min-height:230px; display:grid; place-items:center; border:2px solid var(--line); background:radial-gradient(circle, rgba(216,255,85,.24), rgba(216,255,85,.06) 55%, rgba(0,0,0,.25)); color:var(--accent); font-size:2.3rem; font-weight:900; text-align:center; text-transform:uppercase; }
+    .orb.live { border-color:var(--accent); animation:pulse 1.2s ease-in-out infinite alternate; }
+    @keyframes pulse { from { filter:brightness(.9); } to { filter:brightness(1.35); } }
+    .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+    .messages, pre { min-height:280px; max-height:430px; overflow:auto; margin:0; border:1px solid var(--line); background:#070a08; padding:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .msg { border:1px solid var(--line); padding:10px; margin-bottom:8px; background:#0b100d; }
+    .msg b { color:var(--accent); }
+    audio { width:100%; margin-top:12px; }
+    @media (max-width:860px) { .grid,.voice,.split,.status { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ANDORA<br>Live Voice</h1>
+  <p>Tester real LiveKit room. Mic always-on, no push-to-talk. Tokens stay in memory only.</p>
+  <div class="grid">
+    <section>
+      <h2>Config</h2>
+      <label>API URL <input id="apiUrl" value="http://127.0.0.1:8000"></label>
+      <label>Supabase URL <input id="supabaseUrl" value="http://127.0.0.1:54321"></label>
+      <label>Supabase anon key <input id="anonKey" placeholder="public anon key"></label>
+      <label>Email <input id="email" type="email" value="andora-test@example.com"></label>
+      <label>Password <input id="password" type="password" value="AndoraTest123!"></label>
+      <div class="actions">
+        <button id="signupBtn">Daftar</button>
+        <button id="loginBtn" class="primary">Masuk</button>
+        <button id="logoutBtn" class="danger">Keluar</button>
+        <button id="newConvBtn">Percakapan</button>
+        <button id="tokenBtn">Token</button>
+        <button id="connectBtn" class="primary">Connect</button>
+        <button id="disconnectBtn" class="danger">Disconnect</button>
+        <button id="refreshBtn">Refresh</button>
+      </div>
+    </section>
+    <section>
+      <div class="status">
+        <div class="pill"><b>Auth</b><span id="authState">belum masuk</span></div>
+        <div class="pill"><b>Room</b><span id="roomState">belum connect</span></div>
+        <div class="pill"><b>Mic</b><span id="micState">off</span></div>
+        <div class="pill"><b>Conversation</b><span id="conversationState">belum ada</span></div>
+      </div>
+      <div class="voice">
+        <div id="orb" class="orb">Idle</div>
+        <div>
+          <h2>Flow</h2>
+          <p>Daftar/Login → Percakapan → Token → Connect. Browser akan minta izin microphone. Bicara langsung; Gemini Live yang handle turn.</p>
+          <p>Kalau worker benar, log harus room <code>andora-{conversation_id}</code>, bukan <code>mock-job</code>.</p>
+          <audio id="remoteAudio" autoplay controls></audio>
+        </div>
+      </div>
+      <div class="split">
+        <div><h2>Supabase Messages</h2><div id="messages" class="messages"></div></div>
+        <div><h2>Event Log</h2><pre id="log"></pre></div>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const state = {accessToken:"", conversationId:"", livekit:null, room:null, mic:false};
+function cfg(){return {apiUrl:$('apiUrl').value.replace(/\/$/,''), supabaseUrl:$('supabaseUrl').value.replace(/\/$/,''), anonKey:$('anonKey').value.trim(), email:$('email').value.trim(), password:$('password').value};}
+function safe(data){return JSON.stringify(data,(k,v)=>/token|key|password|secret|authorization/i.test(k)?'[redacted]':v,2)}
+function log(label,data={}){$('log').textContent=`[${new Date().toLocaleTimeString()}] ${label}\n${safe(data)}\n\n`+$('log').textContent}
+async function request(url, options={}){const headers={'Content-Type':'application/json',...(options.headers||{})}; if(state.accessToken) headers.Authorization=`Bearer ${state.accessToken}`; const res=await fetch(url,{...options,headers}); const text=await res.text(); let body=null; try{body=text?JSON.parse(text):null}catch{body=text} log(`${options.method||'GET'} ${url} -> ${res.status}`,body); if(!res.ok) throw new Error(typeof body==='string'?body:(body&&body.detail)||res.statusText); return body}
+function update(){const connected=state.room&&state.room.state==='connected'; $('authState').textContent=state.accessToken?'masuk':'belum masuk'; $('roomState').textContent=connected?'connected':state.livekit?'token siap':'belum connect'; $('micState').textContent=state.mic?'always-on':'off'; $('conversationState').textContent=state.conversationId||'belum ada'; $('orb').classList.toggle('live', connected&&state.mic); $('orb').textContent=connected&&state.mic?'Live':'Idle'; $('signupBtn').disabled=!!state.accessToken; $('loginBtn').disabled=!!state.accessToken; $('logoutBtn').disabled=!state.accessToken; $('newConvBtn').disabled=!state.accessToken; $('tokenBtn').disabled=!state.accessToken||!state.conversationId; $('connectBtn').disabled=!state.livekit||connected; $('disconnectBtn').disabled=!connected; $('refreshBtn').disabled=!state.accessToken||!state.conversationId;}
+function renderMessages(messages=[]){$('messages').innerHTML=messages.length?messages.map(m=>`<div class="msg"><b>${m.role}</b> <small>${m.modality||''}</small><br>${escapeHtml(m.content||'')}</div>`).join(''):'<div class="msg">Belum ada pesan.</div>'}
+function escapeHtml(s){return s.replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+async function signup(){const c=cfg(); await request(`${c.supabaseUrl}/auth/v1/signup`,{method:'POST',headers:{apikey:c.anonKey},body:JSON.stringify({email:c.email,password:c.password})})}
+async function login(){const c=cfg(); const body=await request(`${c.supabaseUrl}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:c.anonKey},body:JSON.stringify({email:c.email,password:c.password})}); state.accessToken=body.access_token; update()}
+async function logout(){await disconnect(); state.accessToken=''; state.conversationId=''; state.livekit=null; renderMessages([]); update(); log('keluar')}
+async function createConversation(){const body=await request(`${cfg().apiUrl}/conversations`,{method:'POST',body:JSON.stringify({title:'Tes Gemini Live'})}); state.conversationId=body.id; await refreshConversation(); update()}
+async function createToken(){state.livekit=await request(`${cfg().apiUrl}/livekit/token`,{method:'POST',body:JSON.stringify({conversation_id:state.conversationId})}); update()}
+function wireRoom(room){const {RoomEvent,Track}=LivekitClient; room.on(RoomEvent.TrackSubscribed,(track,publication,participant)=>{log('track subscribed',{identity:participant.identity,kind:track.kind,source:publication.source}); if(track.kind===Track.Kind.Audio){const el=track.attach(); el.autoplay=true; el.controls=true; $('remoteAudio').replaceWith(el); el.id='remoteAudio';}}); room.on(RoomEvent.DataReceived,(payload,participant,kind,topic)=>{let data=new TextDecoder().decode(payload); try{data=JSON.parse(data)}catch{} log(`data ${topic||'no-topic'}`,{from:participant&&participant.identity,data}); if(data&&typeof data==='object'&&data.conversation_id) refreshConversation().catch(e=>log('refresh error',{message:e.message}));}); room.on(RoomEvent.ConnectionStateChanged,(connectionState)=>{log('room state',{connectionState}); update()}); room.on(RoomEvent.ParticipantConnected,p=>log('participant connected',{identity:p.identity,kind:p.kind}));}
+async function connect(){if(!window.LivekitClient) throw new Error('LiveKit SDK CDN belum termuat'); const room=new LivekitClient.Room(); wireRoom(room); await room.connect(state.livekit.server_url,state.livekit.participant_token); state.room=room; await room.localParticipant.setMicrophoneEnabled(true,{echoCancellation:true,noiseSuppression:true,autoGainControl:true}); state.mic=true; update(); log('connected with always-on mic',{room:state.livekit.room_name})}
+async function disconnect(){if(state.room){await state.room.localParticipant.setMicrophoneEnabled(false); state.room.disconnect();} state.room=null; state.mic=false; state.livekit=null; update()}
+async function refreshConversation(){if(!state.conversationId) return; const body=await request(`${cfg().apiUrl}/conversations/${state.conversationId}`); renderMessages(body.messages||[])}
+function bind(id,fn){$(id).addEventListener('click',()=>fn().catch(e=>log('error',{message:e.message})))}
+bind('signupBtn',signup); bind('loginBtn',login); bind('logoutBtn',logout); bind('newConvBtn',createConversation); bind('tokenBtn',createToken); bind('connectBtn',connect); bind('disconnectBtn',disconnect); bind('refreshBtn',refreshConversation);
+renderMessages([]); update(); log('tester ready',{livekitClient:!!window.LivekitClient});
+</script>
+</body>
+</html>
