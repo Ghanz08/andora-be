@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from supabase import Client, create_client
 from app.config import settings
@@ -22,9 +23,48 @@ class SupabaseService:
             user_resp = client.auth.get_user(token)
             if user_resp and user_resp.user:
                 return {"id": user_resp.user.id, "email": user_resp.user.email}
-        except Exception:
-            pass
+        except Exception as error:
+            raise ValueError("Invalid or expired token") from error
         return None
+
+    @staticmethod
+    async def get_conversation_async(conversation_id: str, user_id: str) -> dict | None:
+        return await asyncio.to_thread(SupabaseService.get_conversation, conversation_id, user_id)
+
+    @staticmethod
+    async def create_conversation_async(user_id: str, title: str = "Percakapan Baru") -> dict:
+        return await asyncio.to_thread(SupabaseService.create_conversation, user_id, title)
+
+    @staticmethod
+    async def list_conversations_async(user_id: str, search: str | None = None) -> list[dict]:
+        return await asyncio.to_thread(SupabaseService.list_conversations, user_id, search)
+
+    @staticmethod
+    async def search_conversations_and_messages_async(user_id: str, query_str: str) -> list[dict]:
+        return await asyncio.to_thread(SupabaseService.search_conversations_and_messages, user_id, query_str)
+
+    @staticmethod
+    async def list_messages_async(conversation_id: str, limit: int = 20) -> list[dict]:
+        return await asyncio.to_thread(SupabaseService.list_messages, conversation_id, limit)
+
+    @staticmethod
+    async def add_message_async(
+        conversation_id: str,
+        role: str,
+        content: str,
+        modality: str = "voice",
+    ) -> dict:
+        return await asyncio.to_thread(
+            SupabaseService.add_message,
+            conversation_id,
+            role,
+            content,
+            modality,
+        )
+
+    @staticmethod
+    async def update_conversation_title_async(conversation_id: str, title: str) -> None:
+        await asyncio.to_thread(SupabaseService.update_conversation_title, conversation_id, title)
 
     @staticmethod
     def create_conversation(user_id: str, title: str = "Percakapan Baru") -> dict:
@@ -145,9 +185,10 @@ class SupabaseService:
         msg = res.data[0] if res.data else {}
 
         preview = content[:100] + ("..." if len(content) > 100 else "")
+        speaker = "Andora" if role == "assistant" else "Anda"
         client.table("conversations").update(
             {
-                "last_message_preview": f"{role.capitalize()}: {preview}",
+                "last_message_preview": f"{speaker}: {preview}",
                 "last_message_at": now,
                 "updated_at": now,
             }

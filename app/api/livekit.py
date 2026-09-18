@@ -12,7 +12,7 @@ async def generate_livekit_token(
     payload: LiveKitTokenRequest,
     current_user: UserAuth = Depends(get_current_user),
 ):
-    conversation = SupabaseService.get_conversation(
+    conversation = await SupabaseService.get_conversation_async(
         conversation_id=payload.conversation_id,
         user_id=current_user.id,
     )

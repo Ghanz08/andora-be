@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.agent.agent import andora_agent
 from app.api.deps import get_current_user
-from app.integrations.supabase_client import SupabaseService
+from app.integrations.ninerouter import AssistantGenerationError
+from app.integrations.supabase_client_client import SupabaseService
 from app.schemas import (
     ChatTurnRequest,
     ChatTurnResponse,
@@ -21,7 +22,7 @@ async def create_conversation(
     current_user: UserAuth = Depends(get_current_user),
 ):
     title = (payload and payload.title) or "Percakapan Baru"
-    conv = SupabaseService.create_conversation(user_id=current_user.id, title=title)
+    conv = await SupabaseService.create_conversation_async(user_id=current_user.id, title=title)
     return conv
 
 
@@ -31,11 +32,11 @@ async def list_recent_conversations(
     current_user: UserAuth = Depends(get_current_user),
 ):
     if search:
-        return SupabaseService.search_conversations_and_messages(
+        return await SupabaseService.search_conversations_and_messages_async(
             user_id=current_user.id,
             query_str=search,
         )
-    return SupabaseService.list_conversations(user_id=current_user.id)
+    return await SupabaseService.list_conversations_async(user_id=current_user.id)
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetailResponse)
@@ -43,7 +44,7 @@ async def get_conversation_detail(
     conversation_id: str,
     current_user: UserAuth = Depends(get_current_user),
 ):
-    conv = SupabaseService.get_conversation(
+    conv = await SupabaseService.get_conversation_async(
         conversation_id=conversation_id,
         user_id=current_user.id,
     )
@@ -52,7 +53,7 @@ async def get_conversation_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found or unauthorized",
         )
-    messages = SupabaseService.list_messages(conversation_id=conversation_id)
+    messages = await SupabaseService.list_messages_async(conversation_id=conversation_id)
     return {**conv, "messages": messages}
 
 
@@ -62,7 +63,7 @@ async def send_message_turn(
     payload: ChatTurnRequest,
     current_user: UserAuth = Depends(get_current_user),
 ):
-    conv = SupabaseService.get_conversation(
+    conv = await SupabaseService.get_conversation_async(
         conversation_id=conversation_id,
         user_id=current_user.id,
     )
@@ -72,12 +73,18 @@ async def send_message_turn(
             detail="Conversation not found or unauthorized",
         )
 
-    user_msg, assistant_msg = await andora_agent.process_turn(
-        conversation_id=conversation_id,
-        user_id=current_user.id,
-        user_text=payload.content,
-        modality=payload.modality,
-    )
+    try:
+        user_msg, assistant_msg = await andora_agent.process_turn(
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+            user_text=payload.content,
+            modality=payload.modality,
+        )
+    except AssistantGenerationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail="Assistant response unavailable",
+        ) from error
 
     return ChatTurnResponse(
         conversation_id=conversation_id,

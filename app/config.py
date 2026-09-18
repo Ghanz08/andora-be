@@ -15,13 +15,17 @@ class Settings(BaseSettings):
     LIVEKIT_URL: str = ""
     LIVEKIT_API_KEY: str = ""
     LIVEKIT_API_SECRET: str = ""
-    LIVEKIT_STT_MODEL: str = "deepgram/nova-3"
+    WHISPER_MODEL: str = "small"
+    WHISPER_DEVICE: str = "cpu"
+    WHISPER_COMPUTE_TYPE: str = "int8"
+    WHISPER_LANGUAGE: str = "id"
     LIVEKIT_TTS_MODEL: str = "cartesia/sonic-3"
     LIVEKIT_TTS_VOICE: str = "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
 
     NINEROUTER_BASE_URL: str = "http://127.0.0.1:20128/v1"
     NINEROUTER_API_KEY: str = ""
     NINEROUTER_MODEL: str = "ghn-fast"
+    NINEROUTER_MAX_TOKENS: int = 2048
     OPENAI_API_KEY: str = ""
 
     MAX_CONTEXT_MESSAGES: int = 20
