@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.deps import get_current_user
 from app.integrations.livekit import livekit_service
-from app.integrations.supabase import SupabaseService
+from app.integrations.supabase_client import SupabaseService
 from app.schemas import LiveKitTokenRequest, LiveKitTokenResponse, UserAuth
 
 router = APIRouter(prefix="/livekit", tags=["livekit"])

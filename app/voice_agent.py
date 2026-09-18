@@ -17,7 +17,7 @@ from livekit.agents import (
 from app.agent.agent import andora_agent
 from app.agent.prompt import SYSTEM_PROMPT
 from app.config import settings
-from app.integrations.supabase import SupabaseService
+from app.integrations.supabase_client import SupabaseService
 
 logger = logging.getLogger("andora.voice")
 ROOM_PREFIX = "andora-"

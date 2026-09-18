@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from app.main import app
-from app.integrations.supabase import SupabaseService
+from app.integrations.supabase_client import SupabaseService
 
 client = TestClient(app)
 

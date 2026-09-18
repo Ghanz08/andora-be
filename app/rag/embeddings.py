@@ -4,11 +4,12 @@ Model: text-embedding-3-small (1536 dimensi, murah, kualitas bagus
 untuk multilingual termasuk Bahasa Indonesia).
 """
 
-import os
 import time
 from openai import OpenAI
+from app.config import settings
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Langsung ambil dari settings yang sudah otomatis membaca .env
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536  # harus sama dengan kolom vector(1536) di Supabase

@@ -1,7 +1,7 @@
 from fastapi import Header, HTTPException, status
 
 from app.config import settings
-from app.integrations.supabase import SupabaseService
+from app.integrations.supabase_client import SupabaseService
 from app.schemas import UserAuth
 
 

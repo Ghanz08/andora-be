@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     NINEROUTER_BASE_URL: str = "http://127.0.0.1:20128/v1"
     NINEROUTER_API_KEY: str = ""
     NINEROUTER_MODEL: str = "ghn-fast"
+    OPENAI_API_KEY: str = ""
 
     MAX_CONTEXT_MESSAGES: int = 20
 

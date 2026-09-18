@@ -1,7 +1,7 @@
 from app.agent.prompt import SYSTEM_PROMPT
 from app.config import settings
 from app.integrations.ninerouter import ninerouter_client
-from app.integrations.supabase import SupabaseService
+from app.integrations.supabase_client import SupabaseService
 
 
 class AndoraAgent:
