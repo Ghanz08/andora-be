@@ -21,7 +21,11 @@ async def get_current_user(authorization: str | None = Header(None)) -> UserAuth
     except ValueError:
         user_data = None
     if user_data:
-        return UserAuth(id=user_data["id"], email=user_data.get("email"))
+        return UserAuth(
+            id=user_data["id"],
+            email=user_data.get("email"),
+            provider=user_data.get("provider"),
+        )
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

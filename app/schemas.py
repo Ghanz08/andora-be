@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class UserAuth(BaseModel):
     id: str
     email: str | None = None
+    provider: str | None = None
 
 
 # Messages

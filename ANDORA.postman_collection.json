@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "ad4c2d76-bdaf-4e22-b758-b1d2f43a2197",
     "name": "ANDORA Backend - Local",
-    "description": "Local Supabase Auth, persistent conversations, 9router chat, and LiveKit token flow.",
+    "description": "Backend contract for Google SSO via Supabase Auth, persistent conversations, 9router chat, and LiveKit token flow. Paste a Supabase access token from the React Native Google sign-in flow into access_token.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -19,16 +19,8 @@
       "value": "PASTE_LOCAL_ANON_KEY_HERE"
     },
     {
-      "key": "email",
-      "value": "andora-test@example.com"
-    },
-    {
-      "key": "password",
-      "value": "AndoraTest123!"
-    },
-    {
       "key": "access_token",
-      "value": ""
+      "value": "PASTE_SUPABASE_ACCESS_TOKEN_FROM_GOOGLE_SSO_HERE"
     },
     {
       "key": "conversation_id",
@@ -60,12 +52,12 @@
       ]
     },
     {
-      "name": "02 - Supabase Auth",
+      "name": "02 - Auth Contract",
       "item": [
         {
-          "name": "Sign Up",
+          "name": "Verify Supabase Access Token",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
                 "key": "apikey",
@@ -73,67 +65,24 @@
                 "type": "text"
               },
               {
-                "key": "Content-Type",
-                "value": "application/json",
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
                 "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-            },
-            "url": "{{supabase_url}}/auth/v1/signup"
+            "url": "{{supabase_url}}/auth/v1/user",
+            "description": "React Native signs in with Google, exchanges the Google ID token with Supabase Auth, then sends this Supabase access token to the backend. Backend endpoints never accept Google ID tokens directly."
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Sign up succeeds or user already exists', function () {",
-                  "  pm.expect([200, 201, 400, 422]).to.include(pm.response.code);",
-                  "});",
-                  "const body = pm.response.json();",
-                  "if (body.access_token) {",
-                  "  pm.collectionVariables.set('access_token', body.access_token);",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "apikey",
-                "value": "{{supabase_anon_key}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-            },
-            "url": "{{supabase_url}}/auth/v1/token?grant_type=password"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Login returns 200', function () {",
+                  "pm.test('Supabase access token is valid', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "const body = pm.response.json();",
-                  "pm.expect(body.access_token).to.be.a('string').and.not.empty;",
-                  "pm.collectionVariables.set('access_token', body.access_token);"
+                  "pm.expect(body.id).to.be.a('string').and.not.empty;"
                 ]
               }
             }

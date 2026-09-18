@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.agent.agent import andora_agent
 from app.api.deps import get_current_user
 from app.integrations.ninerouter import AssistantGenerationError
-from app.integrations.supabase_client_client import SupabaseService
+from app.integrations.supabase_client import SupabaseService
 from app.schemas import (
     ChatTurnRequest,
     ChatTurnResponse,

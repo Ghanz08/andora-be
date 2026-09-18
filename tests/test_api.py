@@ -4,10 +4,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from app.main import app
 from app.integrations.supabase_client import SupabaseService
-<<<<<<< HEAD
-=======
 from app.integrations.ninerouter import AssistantGenerationError
->>>>>>> 1e1234565533c645c80008f8ef75f925a59f8eb3
 
 client = TestClient(app)
 
@@ -26,7 +23,9 @@ def reset_mock_db():
 def mock_supabase_service(monkeypatch):
     def mock_get_user_from_token(token: str):
         if token.startswith("test-user-"):
-            return {"id": token, "email": f"{token}@andora.id"}
+            return {"id": token, "email": f"{token}@andora.id", "provider": "email"}
+        if token == "google-user-no-email":
+            return {"id": "google-user-1", "email": None, "provider": "google"}
         return None
 
     def mock_create_conv(user_id: str, title: str = "Percakapan Baru"):
@@ -239,6 +238,30 @@ def test_livekit_token_generation():
     assert data["conversation_id"] == conv_id
     assert data["room_name"] == f"andora-{conv_id}"
     assert "participant_token" in data
+
+
+def test_google_sso_user_without_email_can_create_conversation_and_livekit_token():
+    headers = {"Authorization": "Bearer google-user-no-email"}
+
+    create_resp = client.post("/conversations", json={"title": "Google SSO"}, headers=headers)
+    assert create_resp.status_code == 201
+    conversation = create_resp.json()
+    assert conversation["user_id"] == "google-user-1"
+
+    with patch("app.api.livekit.livekit_service.create_user_token", return_value="livekit-token") as create_token:
+        token_resp = client.post(
+            "/livekit/token",
+            json={"conversation_id": conversation["id"]},
+            headers=headers,
+        )
+
+    assert token_resp.status_code == 200
+    assert token_resp.json()["participant_token"] == "livekit-token"
+    create_token.assert_called_once_with(
+        user_id="google-user-1",
+        user_name=None,
+        room_name=f"andora-{conversation['id']}",
+    )
 
 
 def test_dev_cors_preflight_allows_external_tester_without_auth_bypass():
