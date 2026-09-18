@@ -12,6 +12,17 @@ CREATE TABLE IF NOT EXISTS public.conversations (
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+create extension if not exists vector;
+
+create table document_chunks (
+    id uuid primary key default gen_random_uuid(),
+    source_document text not null,
+    content text not null,
+    embedding vector(1536),
+    metadata jsonb,
+    created_at timestamptz default now()
+);
+create index on document_chunks using ivfflat (embedding vector_cosine_ops);
 
 -- Index for fast user listing ordered by recent activity
 CREATE INDEX IF NOT EXISTS idx_conversations_user_last_message 
