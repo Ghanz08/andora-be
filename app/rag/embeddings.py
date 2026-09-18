@@ -5,14 +5,20 @@ untuk multilingual termasuk Bahasa Indonesia).
 """
 
 import time
-from openai import OpenAI
-from app.config import settings
+from functools import lru_cache
 
-# Langsung ambil dari settings yang sudah otomatis membaca .env
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+from openai import OpenAI
+
+from app.config import settings
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536  # harus sama dengan kolom vector(1536) di Supabase
+
+
+
+@lru_cache(maxsize=1)
+def _client() -> OpenAI:
+    return OpenAI(api_key=settings.OPENAI_API_KEY or None)
 
 
 def get_embedding(text: str, retries: int = 3) -> list[float]:
@@ -24,7 +30,7 @@ def get_embedding(text: str, retries: int = 3) -> list[float]:
 
     for attempt in range(retries):
         try:
-            response = client.embeddings.create(
+            response = _client().embeddings.create(
                 model=EMBEDDING_MODEL,
                 input=text
             )
@@ -48,7 +54,7 @@ def get_embeddings_batch(texts: list[str], batch_size: int = 50) -> list[list[fl
     for i in range(0, len(texts), batch_size):
         batch = [t.replace("\n", " ").strip() for t in texts[i:i + batch_size]]
 
-        response = client.embeddings.create(
+        response = _client().embeddings.create(
             model=EMBEDDING_MODEL,
             input=batch
         )

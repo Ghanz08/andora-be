@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,7 +13,7 @@ from app.voice_agent import (
     TURN_READY_TOPIC,
     PushToTalkController,
     conversation_id_from_room,
-    create_stt,
+    create_realtime_model,
     handle_completed_turn,
     handle_console_transcript,
     handle_final_transcript,
@@ -20,6 +21,7 @@ from app.voice_agent import (
     publish_turn_completed,
     publish_turn_ready,
     resolve_voice_context,
+    wire_realtime_persistence,
 )
 from app.integrations.ninerouter import AssistantGenerationError
 
@@ -28,12 +30,15 @@ def test_conversation_id_from_room():
     assert conversation_id_from_room("andora-abc-123") == "abc-123"
 
 
-def test_stt_uses_local_faster_whisper():
-    adapter = create_stt()
-    assert adapter.provider == "faster-whisper"
-    assert adapter.model == "small"
-    assert adapter.capabilities.streaming is True
-    assert adapter.wrapped_stt.capabilities.streaming is False
+def test_realtime_model_uses_gemini_live(monkeypatch):
+    monkeypatch.setattr("app.voice_models.settings.GOOGLE_API_KEY", "test-google-key")
+    monkeypatch.setattr("app.voice_models.settings.GEMINI_REALTIME_MODEL", "gemini-3.8-live")
+    monkeypatch.setattr("app.voice_models.settings.GEMINI_REALTIME_VOICE", "Puck")
+    monkeypatch.setattr("app.voice_models.settings.GEMINI_REALTIME_TEMPERATURE", 0.7)
+
+    realtime_model = create_realtime_model()
+
+    assert realtime_model.model == "gemini-3.8-live"
 
 
 @pytest.mark.parametrize("room_name", ["other-abc", "andora-", ""])
@@ -71,7 +76,7 @@ async def test_empty_final_transcript_is_ignored():
     local_participant.publish_data = AsyncMock()
 
     with patch(
-        "app.voice_agent.andora_agent.process_turn",
+        "app.voice_turns.andora_agent.process_turn",
         new_callable=AsyncMock,
     ) as process_turn:
         await handle_final_transcript(
@@ -90,6 +95,72 @@ async def test_empty_final_transcript_is_ignored():
         "conversation_id": "conversation-1",
         "reason": "empty_transcript",
     }
+
+
+@pytest.mark.asyncio
+async def test_realtime_conversation_items_are_persisted_and_published():
+    handlers = {}
+    session = MagicMock()
+
+    def register(event_name):
+        def decorator(fn):
+            handlers[event_name] = fn
+            return fn
+        return decorator
+
+    session.on.side_effect = register
+    local_participant = MagicMock()
+    local_participant.publish_data = AsyncMock()
+    user_message = {"id": "user-msg", "role": "user", "content": "Apa syarat beasiswa?"}
+    assistant_message = {"id": "assistant-msg", "role": "assistant", "content": "Syaratnya adalah..."}
+
+    with (
+        patch(
+            "app.voice_realtime.SupabaseService.get_conversation_async",
+            new_callable=AsyncMock,
+            return_value={"id": "conversation-1"},
+        ),
+        patch(
+            "app.voice_realtime.SupabaseService.add_message_async",
+            new_callable=AsyncMock,
+            side_effect=[user_message, assistant_message],
+        ) as add_message,
+    ):
+        wire_realtime_persistence(
+            session,
+            conversation_id="conversation-1",
+            user_id="user-1",
+            local_participant=local_participant,
+            destination_identity="user-1",
+        )
+        user_item = SimpleNamespace(role="user", text_content="Apa syarat beasiswa?", interrupted=False)
+        assistant_item = SimpleNamespace(role="assistant", text_content="Syaratnya adalah...", interrupted=False)
+        handlers["conversation_item_added"](MagicMock(item=user_item))
+        await asyncio.sleep(0.01)
+        handlers["conversation_item_added"](MagicMock(item=assistant_item))
+        await asyncio.sleep(0.01)
+
+    assert add_message.await_args_list[0].kwargs == {
+        "conversation_id": "conversation-1",
+        "role": "user",
+        "content": "Apa syarat beasiswa?",
+        "modality": "voice",
+    }
+    assert add_message.await_args_list[1].kwargs == {
+        "conversation_id": "conversation-1",
+        "role": "assistant",
+        "content": "Syaratnya adalah...",
+        "modality": "voice",
+    }
+    completed_payload = json.loads(local_participant.publish_data.await_args_list[0].args[0])
+    ready_payload = json.loads(local_participant.publish_data.await_args_list[1].args[0])
+    assert completed_payload == {
+        "type": "andora.turn.completed",
+        "conversation_id": "conversation-1",
+        "user_message": user_message,
+        "assistant_message": assistant_message,
+    }
+    assert ready_payload == {"type": "andora.turn.ready", "conversation_id": "conversation-1"}
 
 
 @pytest.mark.asyncio
@@ -117,7 +188,7 @@ async def test_completed_turn_routes_once_to_console_handler():
     history: list[dict[str, str]] = []
 
     with patch(
-        "app.voice_agent.handle_console_transcript",
+        "app.voice_turns.handle_console_transcript",
         new_callable=AsyncMock,
     ) as console_handler:
         await handle_completed_turn(
@@ -143,7 +214,7 @@ async def test_console_transcript_uses_in_memory_history():
     history: list[dict[str, str]] = []
 
     with patch(
-        "app.voice_agent.ninerouter_client.generate_response",
+        "app.voice_turns.ninerouter_client.generate_response",
         new_callable=AsyncMock,
         return_value="Baik, saya bantu.",
     ) as generate_response:
@@ -173,7 +244,7 @@ async def test_console_transcript_generation_failure_removes_pending_user_histor
     history: list[dict[str, str]] = []
 
     with patch(
-        "app.voice_agent.ninerouter_client.generate_response",
+        "app.voice_turns.ninerouter_client.generate_response",
         new_callable=AsyncMock,
         side_effect=AssistantGenerationError("empty assistant response", status_code=502),
     ):
@@ -200,7 +271,7 @@ async def test_session_closing_does_not_retry_fallback_speech():
     message = MagicMock(text_content="Tolong bantu saya")
 
     with patch(
-        "app.voice_agent.handle_completed_turn",
+        "app.voice_session_agent.handle_completed_turn",
         new_callable=AsyncMock,
         side_effect=RuntimeError("AgentSession is closing, cannot use say()"),
     ):
@@ -212,19 +283,19 @@ async def test_session_closing_does_not_retry_fallback_speech():
 
 
 @pytest.mark.asyncio
-async def test_cloud_agent_does_not_auto_process_manual_ptt_turn():
+async def test_realtime_cloud_agent_lets_gemini_generate_reply(monkeypatch):
+    monkeypatch.setattr("app.voice_session_agent.create_realtime_model", MagicMock(return_value=MagicMock()))
     agent = PersistenceAgent(
         conversation_id="conversation-1",
         user_id="user-1",
         console_history=[],
+        realtime=True,
     )
     agent._activity = MagicMock(session=MagicMock())
 
-    with patch("app.voice_agent.handle_completed_turn", new_callable=AsyncMock) as handler:
-        with pytest.raises(Exception) as raised:
-            await agent.on_user_turn_completed(MagicMock(), MagicMock(text_content="Tolong"))
+    with patch("app.voice_session_agent.handle_completed_turn", new_callable=AsyncMock) as handler:
+        await agent.on_user_turn_completed(MagicMock(), MagicMock(text_content="Tolong"))
 
-    assert raised.value.__class__.__name__ == "StopResponse"
     handler.assert_not_awaited()
 
 
@@ -251,7 +322,7 @@ async def test_final_transcript_is_persisted_and_spoken():
     local_participant.publish_data = AsyncMock()
 
     with patch(
-        "app.voice_agent.andora_agent.process_turn",
+        "app.voice_turns.andora_agent.process_turn",
         new_callable=AsyncMock,
         return_value=(user_message, assistant_message),
     ) as process_turn:
@@ -308,7 +379,7 @@ async def test_final_transcript_generation_failure_publishes_failure_without_spe
     local_participant.publish_data = AsyncMock()
 
     with patch(
-        "app.voice_agent.andora_agent.process_turn",
+        "app.voice_turns.andora_agent.process_turn",
         new_callable=AsyncMock,
         side_effect=AssistantGenerationError("empty assistant response", status_code=502),
     ):
@@ -419,7 +490,7 @@ async def test_ptt_release_processes_returned_transcript_once():
         user_id="user-1",
     )
 
-    with patch("app.voice_agent.handle_final_transcript", new_callable=AsyncMock) as handler:
+    with patch("app.voice_ptt.handle_final_transcript", new_callable=AsyncMock) as handler:
         assert json.loads(await controller.hold("user-1"))["status"] == "accepted"
         response = json.loads(await controller.release("user-1"))
         assert response == {"status": "accepted", "state": "processing"}
@@ -467,7 +538,7 @@ async def test_ptt_registered_rpc_handlers_use_verified_caller_identity():
     )
     controller.register()
 
-    with patch("app.voice_agent.handle_final_transcript", new_callable=AsyncMock):
+    with patch("app.voice_ptt.handle_final_transcript", new_callable=AsyncMock):
         hold_data = MagicMock(caller_identity="user-1")
         release_data = MagicMock(caller_identity="user-1")
         assert json.loads(await handlers[RPC_MIC_HOLD](hold_data))["status"] == "accepted"
@@ -495,7 +566,7 @@ async def test_ptt_duplicate_release_busy_during_processing():
         user_id="user-1",
     )
 
-    with patch("app.voice_agent.handle_final_transcript", new_callable=AsyncMock):
+    with patch("app.voice_ptt.handle_final_transcript", new_callable=AsyncMock):
         await controller.hold("user-1")
         await controller.release("user-1")
         duplicate = json.loads(await controller.release("user-1"))
@@ -542,7 +613,7 @@ async def test_ptt_empty_final_transcript_no_writes():
         user_id="user-1",
     )
 
-    with patch("app.voice_agent.andora_agent.process_turn", new_callable=AsyncMock) as process_turn:
+    with patch("app.voice_turns.andora_agent.process_turn", new_callable=AsyncMock) as process_turn:
         await controller.hold("user-1")
         await controller.release("user-1")
         await controller._pending_task
@@ -594,7 +665,7 @@ async def test_ptt_failure_publishes_failure_event_without_fallback_speech():
     )
 
     with patch(
-        "app.voice_agent.handle_final_transcript",
+        "app.voice_ptt.handle_final_transcript",
         new_callable=AsyncMock,
         side_effect=RuntimeError("boom"),
     ):
@@ -627,7 +698,7 @@ async def test_ptt_failure_publish_error_is_handled_inside_task():
     )
 
     with patch(
-        "app.voice_agent.handle_final_transcript",
+        "app.voice_ptt.handle_final_transcript",
         new_callable=AsyncMock,
         side_effect=RuntimeError("boom"),
     ):

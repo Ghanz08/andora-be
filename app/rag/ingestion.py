@@ -74,7 +74,7 @@ def ingest_all(documents: list[dict]) -> None:
 
 if __name__ == "__main__":
     documents = [
-        {"path": "/home/naziri/Desktop/my_python/andora-be/templates/documents/JUKNIS_KALTIM_TUNTAS.pdf", "source_name": "kaltim_tuntas"},
-        {"path": "/home/naziri/Desktop/my_python/andora-be/templates/documents/PEDOMAN-BU-MAPRES-DISABILITAS_FINAL.pdf", "source_name": "beasiswa_unggulan"},
+        {"path": "templates/documents/JUKNIS_KALTIM_TUNTAS.pdf", "source_name": "kaltim_tuntas"},
+        {"path": "templates/documents/PEDOMAN-BU-MAPRES-DISABILITAS_FINAL.pdf", "source_name": "beasiswa_unggulan"},
     ]
     ingest_all(documents)
