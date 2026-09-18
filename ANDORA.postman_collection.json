@@ -1,0 +1,335 @@
+{
+  "info": {
+    "_postman_id": "ad4c2d76-bdaf-4e22-b758-b1d2f43a2197",
+    "name": "ANDORA Backend - Local",
+    "description": "Local Supabase Auth, persistent conversations, 9router chat, and LiveKit token flow.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "api_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "supabase_url",
+      "value": "http://127.0.0.1:54321"
+    },
+    {
+      "key": "supabase_anon_key",
+      "value": "PASTE_LOCAL_ANON_KEY_HERE"
+    },
+    {
+      "key": "email",
+      "value": "andora-test@example.com"
+    },
+    {
+      "key": "password",
+      "value": "AndoraTest123!"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "conversation_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{api_url}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Health returns 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Status is ok', function () {",
+              "  pm.expect(pm.response.json().status).to.eql('ok');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Supabase Auth",
+      "item": [
+        {
+          "name": "Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{supabase_url}}/auth/v1/signup"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sign up succeeds or user already exists', function () {",
+                  "  pm.expect([200, 201, 400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body.access_token) {",
+                  "  pm.collectionVariables.set('access_token', body.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{supabase_url}}/auth/v1/token?grant_type=password"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('access_token', body.access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Conversations",
+      "item": [
+        {
+          "name": "Create Conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Percakapan Baru\"\n}"
+            },
+            "url": "{{api_url}}/conversations"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Conversation created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.id).to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('conversation_id', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Recent Conversations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{api_url}}/conversations"
+          }
+        },
+        {
+          "name": "Get Conversation and History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{api_url}}/conversations/{{conversation_id}}"
+          }
+        },
+        {
+          "name": "Search Conversations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{api_url}}/conversations?search=surat"
+          }
+        },
+        {
+          "name": "Send Text Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Halo Andora, saya ingin mengetahui cara mengurus surat keterangan domisili.\",\n  \"modality\": \"text\"\n}"
+            },
+            "url": "{{api_url}}/conversations/{{conversation_id}}/messages"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Agent turn succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.user_message.role).to.eql('user');",
+                  "pm.expect(body.assistant_message.role).to.eql('assistant');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send Final Voice Transcript",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Ini adalah transkrip final dari ucapan pengguna.\",\n  \"modality\": \"voice\"\n}"
+            },
+            "url": "{{api_url}}/conversations/{{conversation_id}}/messages"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - LiveKit",
+      "item": [
+        {
+          "name": "Create LiveKit Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversation_id}}\"\n}"
+            },
+            "url": "{{api_url}}/livekit/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('LiveKit token created', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.server_url).to.match(/^wss?:\\/\\//);",
+                  "pm.expect(body.participant_token).to.be.a('string').and.not.empty;",
+                  "pm.expect(body.room_name).to.eql(`andora-${pm.collectionVariables.get('conversation_id')}`);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
