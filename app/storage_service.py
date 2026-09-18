@@ -1,5 +1,5 @@
 import os
-from app.integrations.supabase import get_supabase_client
+from app.integrations.supabase_client import get_supabase_client
 
 supabase = get_supabase_client()
 

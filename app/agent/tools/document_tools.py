@@ -1,8 +1,14 @@
 import json
 import os
 from livekit.agents import function_tool, RunContext
+from livekit import rtc # Tambahan untuk Data Channel
+
+# Pastikan import ini sesuai dengan struktur folder proyekmu
+from app.agent.tools.document_engine import generate_document
+from app.storage_service import upload_document
 
 from app.agent.tools.document_engine import detect_template_fields, generate_document
+from app.storage_service import upload_document
 
 TEMPLATE_FILES = {
     "surat_pernyataan_5_poin": "templates/template_surat_5_point_andora_kaltim_tuntas.docx",
@@ -73,24 +79,45 @@ async def eksekusi_cetak_dokumen(
         os.makedirs("output_dokumen", exist_ok=True)
         output_path = f"output_dokumen/{safe_name}_{room_name}.docx"
 
+        # 1. Cetak dokumen ke server lokal
         hasil_generate = generate_document(
             template_path=template_path,
             output_path=output_path,
             data=data_dict,
         )
 
-        # === INI BAGIAN PENTING YANG DITAMBAHKAN ===
-        # Simpan path dokumen ke userdata, biar tool kirim_dokumen nanti
-        # bisa ambil tanpa perlu user sebut ulang / cari file manual.
-        if hasattr(context, "userdata") and context.userdata is not None:
-            context.userdata.generated_documents[nama_dokumen] = output_path
-        # =============================================
+        # 2. Upload file ke Supabase dan dapatkan URL public-nya
+        public_url = upload_document(output_path)
 
+        # 3. Simpan path lokal & URL ke memori backend (userdata)
+        # Berguna untuk tool lain nanti (misal: kirim_dokumen ke email/WA)
+        if hasattr(context, "userdata") and context.userdata is not None:
+            context.userdata.generated_documents[nama_dokumen] = {
+                "local_path": output_path,
+                "public_url": public_url
+            }
+
+        # 4. Lempar data (URL) langsung ke Frontend via Data Channel
+        if context.room:
+            payload = {
+                "event": "DOCUMENT_READY",
+                "nama_dokumen": nama_dokumen,
+                "url": public_url
+            }
+            # Kirim sinyal ke FE agar memunculkan tombol Download
+            await context.room.local_participant.publish_data(
+                json.dumps(payload).encode("utf-8"),
+                reliable=True
+            )
+
+        # 5. Return instruksi akhir ke AI
         return (
             f"Laporan sistem: {hasil_generate}\n\n"
             f"TUGAS AI: Beritahu user dengan nada ramah bahwa dokumen '{nama_dokumen}' "
-            f"sudah selesai dibuat. Tanyakan apakah user ingin dokumen ini dikirim "
-            f"sekarang, dan ke mana (email atau WhatsApp)."
+            f"sudah selesai dibuat. Arahkan user untuk mengklik tombol 'Download' yang "
+            f"baru saja muncul di layar mereka. JANGAN pernah membacakan link URL-nya. "
+            f"Terakhir, tanyakan apakah user ingin dokumen ini dikirimkan "
+            f"sekarang ke email atau WhatsApp mereka."
         )
 
     except json.JSONDecodeError:
