@@ -191,7 +191,7 @@ def chunk_document(source_path: str, source_name: str, is_pdf: bool = True) -> l
 
 
 if __name__ == "__main__":
-    chunks = chunk_document("/home/naziri/Desktop/my_python/andora-be/templates/documents/JUKNIS_KALTIM_TUNTAS.pdf", "juknis_kaltim_tuntas", is_pdf=True)
+    chunks = chunk_document("templates/documents/JUKNIS_KALTIM_TUNTAS.pdf", "juknis_kaltim_tuntas", is_pdf=True)
 
     print(f"=== TOTAL CHUNKS: {len(chunks)} ===\n")
     for i, c in enumerate(chunks):
