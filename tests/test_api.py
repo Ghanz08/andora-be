@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from app.main import app
-from app.integrations.supabase import SupabaseService
+from app.integrations.supabase_client import SupabaseService
+from app.integrations.ninerouter import AssistantGenerationError
 
 client = TestClient(app)
 
@@ -20,6 +21,11 @@ def reset_mock_db():
 
 @pytest.fixture(autouse=True)
 def mock_supabase_service(monkeypatch):
+    def mock_get_user_from_token(token: str):
+        if token.startswith("test-user-"):
+            return {"id": token, "email": f"{token}@andora.id"}
+        return None
+
     def mock_create_conv(user_id: str, title: str = "Percakapan Baru"):
         cid = f"conv-{len(MOCK_CONVERSATIONS) + 1}"
         now = datetime.now(timezone.utc).isoformat()
@@ -63,7 +69,8 @@ def mock_supabase_service(monkeypatch):
         MOCK_MESSAGES[conversation_id].append(msg)
 
         if conversation_id in MOCK_CONVERSATIONS:
-            MOCK_CONVERSATIONS[conversation_id]["last_message_preview"] = f"{role.capitalize()}: {content[:50]}"
+            speaker = "Andora" if role == "assistant" else "Anda"
+            MOCK_CONVERSATIONS[conversation_id]["last_message_preview"] = f"{speaker}: {content[:50]}"
             MOCK_CONVERSATIONS[conversation_id]["last_message_at"] = now
             MOCK_CONVERSATIONS[conversation_id]["updated_at"] = now
         return msg
@@ -76,12 +83,41 @@ def mock_supabase_service(monkeypatch):
         if conversation_id in MOCK_CONVERSATIONS:
             MOCK_CONVERSATIONS[conversation_id]["title"] = title
 
+    async def mock_get_conv_async(conversation_id: str, user_id: str):
+        return mock_get_conv(conversation_id, user_id)
+
+    async def mock_create_conv_async(user_id: str, title: str = "Percakapan Baru"):
+        return mock_create_conv(user_id, title)
+
+    async def mock_list_conv_async(user_id: str, search: str | None = None):
+        return mock_list_conv(user_id, search)
+
+    async def mock_search_conv_async(user_id: str, query_str: str):
+        return mock_list_conv(user_id, query_str)
+
+    async def mock_add_msg_async(conversation_id: str, role: str, content: str, modality: str = "voice"):
+        return mock_add_msg(conversation_id, role, content, modality)
+
+    async def mock_list_msgs_async(conversation_id: str, limit: int = 20):
+        return mock_list_msgs(conversation_id, limit)
+
+    async def mock_update_title_async(conversation_id: str, title: str):
+        mock_update_title(conversation_id, title)
+
     monkeypatch.setattr(SupabaseService, "create_conversation", mock_create_conv)
+    monkeypatch.setattr(SupabaseService, "get_user_from_token", mock_get_user_from_token)
     monkeypatch.setattr(SupabaseService, "get_conversation", mock_get_conv)
     monkeypatch.setattr(SupabaseService, "list_conversations", mock_list_conv)
     monkeypatch.setattr(SupabaseService, "add_message", mock_add_msg)
     monkeypatch.setattr(SupabaseService, "list_messages", mock_list_msgs)
     monkeypatch.setattr(SupabaseService, "update_conversation_title", mock_update_title)
+    monkeypatch.setattr(SupabaseService, "get_conversation_async", mock_get_conv_async)
+    monkeypatch.setattr(SupabaseService, "create_conversation_async", mock_create_conv_async)
+    monkeypatch.setattr(SupabaseService, "list_conversations_async", mock_list_conv_async)
+    monkeypatch.setattr(SupabaseService, "search_conversations_and_messages_async", mock_search_conv_async)
+    monkeypatch.setattr(SupabaseService, "add_message_async", mock_add_msg_async)
+    monkeypatch.setattr(SupabaseService, "list_messages_async", mock_list_msgs_async)
+    monkeypatch.setattr(SupabaseService, "update_conversation_title_async", mock_update_title_async)
 
 
 def test_health_check():
@@ -98,6 +134,15 @@ def test_authenticated_conversation_creation():
     assert data["title"] == "Pembuatan KTP"
     assert data["user_id"] == "test-user-1"
     assert "id" in data
+
+
+def test_invalid_auth_token_rejected():
+    response = client.post(
+        "/conversations",
+        json={"title": "Pembuatan KTP"},
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+    assert response.status_code == 401
 
 
 def test_user_cannot_access_another_users_conversation():
@@ -155,7 +200,29 @@ async def test_agent_message_turn_flow():
         assert len(detail["messages"]) == 2
         assert detail["messages"][0]["role"] == "user"
         assert detail["messages"][1]["role"] == "assistant"
-        assert "Assistant:" in detail["last_message_preview"]
+        assert "Andora:" in detail["last_message_preview"]
+
+
+def test_message_turn_generation_failure_returns_safe_error_without_assistant_write():
+    headers = {"Authorization": "Bearer test-user-1"}
+    c = client.post("/conversations", json={"title": "Voice Session"}, headers=headers).json()
+    conv_id = c["id"]
+
+    with patch(
+        "app.integrations.ninerouter.ninerouter_client.generate_response",
+        new_callable=AsyncMock,
+        side_effect=AssistantGenerationError("upstream detail with secret sk-test", status_code=502),
+    ):
+        turn_resp = client.post(
+            f"/conversations/{conv_id}/messages",
+            json={"content": "Bagaimana cara membuat surat keterangan?", "modality": "text"},
+            headers=headers,
+        )
+
+    assert turn_resp.status_code == 502
+    assert turn_resp.json() == {"detail": "Assistant response unavailable"}
+    detail = client.get(f"/conversations/{conv_id}", headers=headers).json()
+    assert [message["role"] for message in detail["messages"]] == ["user"]
 
 
 def test_livekit_token_generation():
@@ -169,3 +236,27 @@ def test_livekit_token_generation():
     assert data["conversation_id"] == conv_id
     assert data["room_name"] == f"andora-{conv_id}"
     assert "participant_token" in data
+
+
+def test_dev_cors_preflight_allows_external_tester_without_auth_bypass():
+    preflight = client.options(
+        "/livekit/token",
+        headers={
+            "Origin": "http://127.0.0.1:5500",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == "http://127.0.0.1:5500"
+    assert "authorization" in preflight.headers["access-control-allow-headers"].lower()
+    assert "content-type" in preflight.headers["access-control-allow-headers"].lower()
+
+    post = client.post(
+        "/livekit/token",
+        json={"conversation_id": "conv-1"},
+        headers={"Origin": "http://127.0.0.1:5500"},
+    )
+    assert post.status_code == 401
+    assert post.headers["access-control-allow-origin"] == "http://127.0.0.1:5500"
