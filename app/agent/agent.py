@@ -1,7 +1,7 @@
 from app.agent.prompt import SYSTEM_PROMPT
 from app.config import settings
 from app.integrations.ninerouter import ninerouter_client
-from app.integrations.supabase import SupabaseService
+from app.integrations.supabase_client import SupabaseService
 
 
 class AndoraAgent:
@@ -25,14 +25,18 @@ class AndoraAgent:
         4. Save assistant message
         5. Return (user_message, assistant_message)
         """
-        user_msg = SupabaseService.add_message(
+        conversation = await SupabaseService.get_conversation_async(conversation_id, user_id)
+        if not conversation:
+            raise PermissionError("Conversation not found or user is not its owner")
+
+        user_msg = await SupabaseService.add_message_async(
             conversation_id=conversation_id,
             role="user",
             content=user_text,
             modality=modality,
         )
 
-        history_msgs = SupabaseService.list_messages(
+        history_msgs = await SupabaseService.list_messages_async(
             conversation_id=conversation_id,
             limit=settings.MAX_CONTEXT_MESSAGES,
         )
@@ -44,7 +48,7 @@ class AndoraAgent:
 
         assistant_text = await ninerouter_client.generate_response(llm_messages)
 
-        assistant_msg = SupabaseService.add_message(
+        assistant_msg = await SupabaseService.add_message_async(
             conversation_id=conversation_id,
             role="assistant",
             content=assistant_text,
@@ -54,7 +58,7 @@ class AndoraAgent:
         if len(history_msgs) <= 2:
             short_title = user_text[:30].strip()
             if short_title:
-                SupabaseService.update_conversation_title(
+                await SupabaseService.update_conversation_title_async(
                     conversation_id=conversation_id,
                     title=f"Bantuan: {short_title}",
                 )
