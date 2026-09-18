@@ -6,6 +6,8 @@ from typing import Literal
 
 from livekit.agents import function_tool, RunContext
 
+from app.services.storage_service import upload_document
+
 
 def _send_email_smtp(to_email: str, file_path: str, subject: str, body: str) -> None:
     """Kirim email dengan attachment lewat SMTP."""
@@ -87,12 +89,19 @@ async def kirim_dokumen(
         # WhatsApp gak bisa dikirim langsung dari backend (lihat catatan
         # PERUBAHAN.md), jadi kita kirim SIGNAL ke FE lewat data channel
         # LiveKit, supaya FE buka Intent WhatsApp dengan file siap kirim.
+        #
+        # FE gak punya akses ke filesystem server, jadi file HARUS
+        # di-upload dulu ke storage publik, baru URL-nya dikirim ke FE
+        # buat didownload ke lokal HP sebelum di-attach ke Intent.
         try:
+            file_url = upload_document(file_path)
+
             payload = {
                 "action": "OPEN_WHATSAPP_INTENT",
                 "payload": {
                     "phone_number": tujuan,
-                    "file_path": file_path,
+                    "file_url": file_url,
+                    "file_name": os.path.basename(file_path),
                     "caption": f"Dokumen {nama_dokumen.replace('_', ' ')} dari Andora",
                 },
             }
