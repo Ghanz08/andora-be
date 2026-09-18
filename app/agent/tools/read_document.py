@@ -2,6 +2,8 @@ import os
 import pdfplumber
 from livekit.agents import function_tool, RunContext
 
+UPLOAD_DIR = "temp_uploads"
+
 # ==========================================
 # 1. LOGIKA UTAMA (Independen & Bisa Dites)
 # ==========================================
@@ -59,7 +61,7 @@ async def read_uploaded_document(
         pertanyaan_spesifik: Pertanyaan user terkait isi dokumen. Kosongkan jika hanya minta dibacakan.
     """
     room_name = context.room.name if context.room else "default_room"
-    target_file = f"/home/naziri/Desktop/my_python/andora-be/temp_uploads/{room_name}_latest.pdf" 
+    target_file = os.path.join(UPLOAD_DIR, f"{room_name}_latest.pdf")
     
     # AI memanggil fungsi independen di atas
     return process_document_query(target_file, pertanyaan_spesifik)
@@ -72,7 +74,7 @@ if __name__ == "__main__":
     
     # 1. Siapkan folder dan file dummy untuk tes
     os.makedirs("temp_uploads", exist_ok=True)
-    test_file_path = "/home/naziri/Desktop/my_python/andora-be/templates/documents/tes_read_doc.pdf"
+    test_file_path = "templates/documents/tes_read_doc.pdf"
   
     # 2. Tes skenario pertama: User minta rangkuman (tanpa pertanyaan spesifik)
     print("Skenario 1: User bilang 'Tolong bacakan dokumennya'")

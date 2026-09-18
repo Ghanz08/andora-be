@@ -20,7 +20,7 @@ async def search_knowledge(
     query: str,
     program: Literal["kaltim_tuntas", "beasiswa_unggulan"],
 ) -> str:
-    """Docstring tetap sama persis seperti sebelumnya..."""
+    """Cari informasi persyaratan dan petunjuk teknis beasiswa di basis pengetahuan."""
     
     # 2. Tarik konteks Juknis asli
     results = retrieve(query=query, program=program, top_k=3)

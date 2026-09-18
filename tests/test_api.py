@@ -286,3 +286,19 @@ def test_dev_cors_preflight_allows_external_tester_without_auth_bypass():
     )
     assert post.status_code == 401
     assert post.headers["access-control-allow-origin"] == "http://127.0.0.1:5500"
+
+
+def test_download_generated_document_redirect():
+    with patch("app.api.routes.documents.get_document_url", return_value="http://127.0.0.1:54321/storage/v1/object/public/generated-documents/documents/test.docx"):
+        resp = client.get("/api/documents/download/test.docx?redirect=true", follow_redirects=False)
+        assert resp.status_code == 307
+        assert "generated-documents" in resp.headers["location"]
+
+
+def test_download_generated_document_stream():
+    with patch("app.api.routes.documents.download_document_bytes", return_value=b"fake-docx-content"):
+        resp = client.get("/api/documents/download/test.docx")
+        assert resp.status_code == 200
+        assert resp.content == b"fake-docx-content"
+        assert 'attachment; filename="test.docx"' in resp.headers["content-disposition"]
+

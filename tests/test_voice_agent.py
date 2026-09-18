@@ -24,6 +24,7 @@ from app.voice_agent import (
     wire_realtime_persistence,
 )
 from app.integrations.ninerouter import AssistantGenerationError
+from app.voice_session_agent import VOICE_TOOLS
 
 
 def test_conversation_id_from_room():
@@ -67,6 +68,25 @@ def test_cloud_context_requires_andora_room():
 def test_rpc_method_names():
     assert RPC_MIC_HOLD == "andora.mic.hold"
     assert RPC_MIC_RELEASE == "andora.mic.release"
+
+
+def test_voice_agent_registers_document_tools(monkeypatch):
+    monkeypatch.setattr("app.voice_session_agent.create_realtime_model", MagicMock(return_value=MagicMock()))
+    agent = PersistenceAgent(
+        conversation_id="conversation-1",
+        user_id="user-1",
+        console_history=[],
+        realtime=True,
+    )
+
+    assert [tool.__name__ for tool in VOICE_TOOLS] == [
+        "search_knowledge",
+        "read_uploaded_document",
+        "siapkan_pengisian_dokumen",
+        "eksekusi_cetak_dokumen",
+        "kirim_dokumen",
+    ]
+    assert [tool.__name__ for tool in agent._tools] == [tool.__name__ for tool in VOICE_TOOLS]
 
 
 @pytest.mark.asyncio
