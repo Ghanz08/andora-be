@@ -59,7 +59,7 @@ async def read_uploaded_document(
         pertanyaan_spesifik: Pertanyaan user terkait isi dokumen. Kosongkan jika hanya minta dibacakan.
     """
     room_name = context.room.name if context.room else "default_room"
-    target_file = f"temp_uploads/{room_name}_latest.pdf" 
+    target_file = f"/home/naziri/Desktop/my_python/andora-be/temp_uploads/{room_name}_latest.pdf" 
     
     # AI memanggil fungsi independen di atas
     return process_document_query(target_file, pertanyaan_spesifik)
