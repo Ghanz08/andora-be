@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import smtplib
@@ -6,6 +7,7 @@ from typing import Literal
 
 from livekit.agents import function_tool, RunContext
 
+from app.agent.tools.document_tools import _get_livekit_room, resolve_template
 from app.storage_service import upload_document
 
 
@@ -57,7 +59,18 @@ async def kirim_dokumen(
     if not hasattr(context, "userdata") or context.userdata is None:
         return "Error sistem: tidak ada data sesi tersimpan."
 
-    document_info = context.userdata.generated_documents.get(nama_dokumen)
+    generated = getattr(context.userdata, "generated_documents", None)
+    if not isinstance(generated, dict) and isinstance(context.userdata, dict):
+        generated = context.userdata.get("generated_documents", {})
+    if not isinstance(generated, dict):
+        generated = {}
+    canonical_name, _ = resolve_template(nama_dokumen)
+    lookup_keys = [k for k in [canonical_name, nama_dokumen] if k]
+    document_info = None
+    for key in lookup_keys:
+        if key in generated:
+            document_info = generated[key]
+            break
     if isinstance(document_info, dict):
         file_path = document_info.get("local_path")
     else:
@@ -98,7 +111,7 @@ async def kirim_dokumen(
         # di-upload dulu ke storage publik, baru URL-nya dikirim ke FE
         # buat didownload ke lokal HP sebelum di-attach ke Intent.
         try:
-            file_url = upload_document(file_path)
+            file_url = await asyncio.to_thread(upload_document, file_path)
 
             payload = {
                 "action": "OPEN_WHATSAPP_INTENT",
@@ -110,8 +123,10 @@ async def kirim_dokumen(
                 },
             }
 
-            if context.room:
-                await context.room.local_participant.publish_data(
+            room = _get_livekit_room(context)
+            local_participant = getattr(room, "local_participant", None) if room is not None else None
+            if local_participant:
+                await local_participant.publish_data(
                     json.dumps(payload).encode("utf-8"),
                     reliable=True,
                 )

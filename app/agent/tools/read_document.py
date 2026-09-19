@@ -1,6 +1,6 @@
 import os
 import pdfplumber
-from livekit.agents import function_tool, RunContext
+from livekit.agents import function_tool, RunContext, get_job_context
 
 UPLOAD_DIR = "temp_uploads"
 
@@ -60,7 +60,21 @@ async def read_uploaded_document(
     Args:
         pertanyaan_spesifik: Pertanyaan user terkait isi dokumen. Kosongkan jika hanya minta dibacakan.
     """
-    room_name = context.room.name if context.room else "default_room"
+    room_name = "default_room"
+    session = getattr(context, "session", None)
+    room_io = getattr(session, "room_io", None) if session is not None else None
+    room = getattr(room_io, "room", None) if room_io is not None else None
+    if room is None:
+        room = getattr(context, "room", None)
+    if room is None:
+        try:
+            job_ctx = get_job_context(required=False)
+        except Exception:
+            job_ctx = None
+        if job_ctx is not None:
+            room = getattr(job_ctx, "room", None)
+    if room is not None and getattr(room, "name", None):
+        room_name = room.name
     target_file = os.path.join(UPLOAD_DIR, f"{room_name}_latest.pdf")
     
     # AI memanggil fungsi independen di atas

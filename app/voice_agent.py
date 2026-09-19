@@ -52,6 +52,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         turn_handling=TurnHandlingOptions(turn_detection=None),
+        userdata={"generated_documents": {}},
     )
     console_history: list[dict[str, str]] = []
 
