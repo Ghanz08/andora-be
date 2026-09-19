@@ -33,5 +33,7 @@ class Settings(BaseSettings):
 
     MAX_CONTEXT_MESSAGES: int = 20
 
+    CORS_ORIGINS: str = "http://127.0.0.1:5500,http://localhost:5500,*"
+
 
 settings = Settings()
